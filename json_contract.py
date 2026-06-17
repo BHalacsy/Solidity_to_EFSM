@@ -1,5 +1,8 @@
 import subprocess
 import json
+import os
+
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ############### Function to clean the JSON file by removing the extra string ###############
 
@@ -20,10 +23,27 @@ def clean_json_content(json_content):
         print("No valid JSON content found.")
         return None
 
+def select_solc(contract_file):
+    SOLC_MAP = {
+        5: "/home/balint/bin/solc-0.5.17",
+    }
+    try:
+        with open(contract_file) as f:
+            content = f.read()
+        import re
+        m = re.search(r'pragma solidity\s+[\^~]?(\d+)\.(\d+)', content)
+        if m and int(m.group(1)) == 0:
+            minor = int(m.group(2))
+            if minor in SOLC_MAP:
+                return SOLC_MAP[minor]
+    except OSError:
+        pass
+    return "/home/balint/bin/solc"  # default: 0.8.x
+
 ############### Function to compile the contract and return AST JSON in memory ###############
 def compile_contract_to_ast_in_memory(contract_file):
     # Command to generate the AST in compact JSON format using solc
-    command = ["C:/Windows/solcfolder/solc", "--ast-compact-json", contract_file]
+    command = [select_solc(contract_file), "--ast-compact-json", contract_file]
 
     # Run the command and capture the output in memory
     result = subprocess.run(command, capture_output=True, text=True)
@@ -40,7 +60,7 @@ def compile_contract_to_ast_in_memory(contract_file):
 
 
 ############### Main logic ###################################
-def process_contract_in_memory(contract_file):
+def process_contract_in_memory(contract_file, target_contract=None):
     # Compile the contract and get the AST JSON data in memory
     raw_json_data = compile_contract_to_ast_in_memory(contract_file)
 
@@ -50,21 +70,19 @@ def process_contract_in_memory(contract_file):
     if clean_json:
         # Extract the relevant nodes
         print(json.dumps(clean_json))
-        sol_list = clean_json['nodes'][1]['nodes']
+        top_nodes = clean_json['nodes']
 
-        # # Collect the final results in a list
-        # final_result = []
-        # for n_id in range(len(sol_list)):
-        #     print('ID PROCESSING: ', n_id)
-        #     final_result = lookup_table[ntype(sol_list[n_id])](sol_list[n_id])
-        #     #final_results.append(final_result)  # Store each result
+        if target_contract:
+            for node in top_nodes:
+                if node.get('nodeType') == 'ContractDefinition' and node.get('name') == target_contract:
+                    return node['nodes']
+            print(f"Warning: contract '{target_contract}' not found; falling back to nodes[1]")
 
-        return sol_list  # Return the list of final results
+        return top_nodes[1]['nodes']
     return None
 
 final_sol_list = []
-# Example usage
-contract_file = r'smart_contracts/casino_nonblocking.sol'  # Replace with the path to your contract
+contract_file = os.path.join(PROJECT_DIR, 'smart_contracts', 'AkuAuction_simplified.sol')
 try:
     final_sol_list = process_contract_in_memory(contract_file)
 except Exception as e:

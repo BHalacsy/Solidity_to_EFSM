@@ -75,7 +75,7 @@ def handleVariableDeclaration(node):
     var_type = lookup_table[ntype(node['typeName'])](node['typeName'])
     initial_value = str()
     if var_type == 'bool':
-        if 'value' in node:
+        if 'value' in node and node['value'] is not None:
             #print('Boolean variable found:', name)
             initial_value = lookup_table[ntype(node['value'])](node['value'])
             #print('Initial value:', initial_value)
@@ -218,6 +218,10 @@ def handlePlaceholderStatement(node):
     assert ntype(node) == 'PlaceholderStatement', "Node not PlaceholderStatement"
     return False
 
+def handleReturn(node):
+    assert ntype(node) == 'Return', "Node not Return"
+    return False
+
 def handleBlock(node):
     assert ntype(node) == 'Block', "Node not Block"
     statements = []
@@ -251,17 +255,26 @@ def handleModifierDefinition(node):
 def handleFunctionDefinition(node):
     assert ntype(node) == 'FunctionDefinition', "Node not FunctionDefinition"
     global current_function_name
-    current_function_name = node['name']
+
+    kind = node.get('kind', 'function')
+    if kind == 'constructor':
+        return
+    if kind == 'receive':
+        current_function_name = 'receive'
+    elif node['name']:
+        current_function_name = node['name']
 
     packet = {}
     packet['body'] = lookup_table[ntype(node['body'])](node['body'])
     packet['params'] = lookup_table[ntype(node['parameters'])](node['parameters'])
     packet['name'] = node['name']
 
-
-    if packet['name'] == "": # The constructor as no name
-        # do nothing
+    if packet['name'] == '' and kind != 'receive':
         return
+    if kind == 'receive':
+        packet['name'] = 'receive'
+
+    current_function_name = packet['name']
     packet['modifiers'] = [lookup_table[ntype(m)](m) for m in node['modifiers']]
     super_struct = superFunctionDefinition(packet)
     return super_struct
@@ -269,6 +282,13 @@ def handleFunctionDefinition(node):
 def handleAssignment(node):
     assert ntype(node) == 'Assignment', "Node not Assignment"
     lhs = lookup_table[ntype(node['leftHandSide'])](node['leftHandSide'])  # lhs can be indexAccess returning this  {'operator': 'withdrawable_operator', 'player': 'withdrawable_player'}
+
+    if isinstance(lhs, str):
+        mapping_vars = {v for inner in VariableComponent['MappingVariables'].values()
+                        for v in inner.values()}
+        if lhs in mapping_vars:
+            return {'ntype': ntype(node), 'kind': 'simple', 'exp': wmodify_assignment(lhs, '=', '1')}
+
     op = node['operator']
     rhs = lookup_table[ntype(node['rightHandSide'])](node['rightHandSide'])
     #print('RRHHSS ----', rhs)
@@ -423,7 +443,7 @@ def handleVariableDeclarationStatement(node):
 
 
     else:
-        return str (name + " = " + init_value)  # need to convert this to xml as well. For later.
+        return False
 
 def handleConditional(node):
     assert ntype(node) == 'Conditional', "Node not conditional"
@@ -453,13 +473,14 @@ def handleIfStatement(node):
     false_condition = ET.Element("UnaryExpression", Operator = "!")
     false_condition.append(true_condition)
 
-    if 'falseBody' in node:
+    has_false_body = 'falseBody' in node and node['falseBody'] is not None
+    if has_false_body:
         false_body = lookup_table[ntype(node['falseBody'])](node['falseBody'])
     #print(false_body)
     true_body = lookup_table[ntype(node['trueBody'])](node['trueBody'])
     #print(true_body)
     #return  str("if" + "( " + condition+" )" + "{\n\t"  + true_body + "\n" + "} " + "else "  + "{\n\t" + false_body + "\n" + "} ")
-    if 'falseBody' in node:
+    if has_false_body:
         return {'ntype': ntype(node), 'true_condition' : true_condition,'false_condition': false_condition, 'true_body' : true_body, 'false_body' : false_body}
     else:
         return {'ntype': ntype(node), 'true_condition' : true_condition,'true_body' : true_body, 'false_condition': false_condition}
@@ -543,5 +564,6 @@ lookup_table['IfStatement'] = handleIfStatement
 lookup_table['StructDefinition'] = handleStructDefinition
 lookup_table['Mapping'] = handleMapping
 lookup_table['IndexAccess'] = handleIndexAccess
+lookup_table['Return'] = handleReturn
 
 

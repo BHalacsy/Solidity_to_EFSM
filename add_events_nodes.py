@@ -86,6 +86,7 @@ for efsm in pre_supremica['Components']:
     node_id = 0
     efsm_node_list = []
     node_list = []
+    temporary_source_node = ""
     if efsm != 'VariableComponent':
         if 'edge_list' in pre_supremica['Components'][efsm]:
 
@@ -188,7 +189,7 @@ for efsm in pre_supremica['Components']:
                             #print(asdf)
                             source_node = condition_node
 
-                            target_node = true_last_node
+                            target_node = true_last_node if true_last_node else INITIAL_NODE
                             processing_transition['source_index'] = source_node
                             processing_transition['target_index'] = target_node
                             add_node_to_efsm_node_list(source_node, target_node)
@@ -264,7 +265,7 @@ for efsm in pre_supremica['Components']:
                             # print(asdf)
                             source_node = condition_node
 
-                            target_node = true_last_node
+                            target_node = true_last_node if true_last_node else INITIAL_NODE
                             processing_transition['source_index'] = source_node
                             processing_transition['target_index'] = target_node
                             add_node_to_efsm_node_list(source_node, target_node)
@@ -319,7 +320,14 @@ for efsm in pre_supremica['Components']:
 
                     else: # if it is neither the first nor the last transition
                         source_node = get_new_node('source') #s6 #s6 #s5
-                        if processing_transition['transition_type'] == 'self_loop':
+                        if temporary_source_node != "" and processing_transition['transition_type'] == '':
+                            source_node = temporary_source_node
+                            target_node = get_new_node('target')
+                            processing_transition['source_index'] = source_node
+                            processing_transition['target_index'] = target_node
+                            add_node_to_efsm_node_list(source_node, target_node)
+                            temporary_source_node = target_node
+                        elif processing_transition['transition_type'] == 'self_loop':
                             target_node = source_node #s6
 
                         elif processing_transition['transition_type'] == 'transfer_success':
@@ -381,7 +389,7 @@ for efsm in pre_supremica['Components']:
                             #print(asdf)
                             source_node = condition_node
 
-                            target_node = true_last_node
+                            target_node = true_last_node if true_last_node else get_new_node('source')
                             processing_transition['source_index'] = source_node
                             processing_transition['target_index'] = target_node
                             add_node_to_efsm_node_list(source_node, target_node)

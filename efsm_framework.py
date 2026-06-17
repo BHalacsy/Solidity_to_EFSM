@@ -453,6 +453,8 @@ def add_transfer_efsm(efsm_name):
 
 def check_require_in_function(body):
     for exp in body:
+        if not isinstance(exp, dict):
+            continue
         if 'ntype' in exp and exp['ntype'] == 'FunctionCall':
             if exp['name'] == 'require':
                 return True
@@ -463,6 +465,8 @@ def check_parameter_in_require( body, search_string):
     # check for all parameter if they are present in any require statement
     # Check if the search string is in the element's text
     for exp in body:
+        if not isinstance(exp, dict):
+            continue
         if 'ntype' in exp and exp['ntype'] == 'FunctionCall':
             if exp['name'] == 'require':
                 element = exp['args']
@@ -567,6 +571,8 @@ def superFunctionDefinition(packet):
 
     for exp_index, exp in enumerate(body):
         #print(exp_index)
+        if not isinstance(exp, dict):
+            continue
         if 'type' in exp and exp['type'] == 'transfer':
             transfer_in_function_name = str()
 
@@ -688,7 +694,7 @@ def superFunctionDefinition(packet):
             true_exp_transition = {'ntype': 'IfStatement', 'kind': 'internal', 'condition': 'true',
                                    'guard_exp': true_condition, 'type': 'true_body_start'}
 
-            if 'false_body' in exp:
+            if 'false_body' in exp and len(exp['false_body']) > 0:
                 false_exp_transition = {'ntype': 'IfStatement', 'kind': 'internal', 'condition': 'false',
                                     'guard_exp': false_condition, 'type': 'false_body_start'}
             else:
@@ -696,6 +702,8 @@ def superFunctionDefinition(packet):
 
             function.addTransition(true_exp_transition)
             for index, stmnt in enumerate(true_body): # add transitions for each statement in the true body
+                if not isinstance(stmnt, dict):
+                    continue
                 if index == len(true_body) - 1: # if it is the only statement / last statement in true body
 
                     #print('true body last statement', stmnt)
@@ -794,7 +802,7 @@ def superFunctionDefinition(packet):
                         function_complete = {'ntype': 'Simple', 'name': stmnt['name'] + 'X', 'type': 'function_complete'}
                         function_fail = {'ntype': 'Simple', 'name': stmnt['name'] + 'Fail', 'type': 'function_fail'}
                         #function.addTransition(function_fail)
-                        if check_transfer_in_function(function_call_name):
+                        if check_transfer_in_function(stmnt['name']):
                             function_fail = {'ntype': 'Simple', 'name': stmnt['name'] + 'Fail', 'type': 'function_fail'}
                             function.addTransition(function_fail)
 
@@ -806,6 +814,8 @@ def superFunctionDefinition(packet):
 
             if 'false_body' in exp: # if false body is present
                 for index, stmnt in enumerate(false_body): # add transitions for each statement in the false body
+                    if not isinstance(stmnt, dict):
+                        continue
                     if index == len(false_body) - 1:  # if it is the last statement in the false body
                         stmnt['type'] = 'false_body_last'
                         function.addTransition(stmnt)
@@ -973,13 +983,17 @@ def superFunctionDefinition(packet):
                         pass
 
                     process_in_ignore_list(exp, 'exp', ignore_list, function)
+                    initial_statement_added = True
 
                 elif 'expression' in exp:
 
                     process_in_ignore_list(exp, 'expression', ignore_list, function)
+                    initial_statement_added = True
 
 
     efsm_edge_list = function.edge_list
+    if not efsm_edge_list:
+        return Supremica
     last_key, last_element = next(reversed(efsm_edge_list.items()))
 
     variable_temp_dict = {}
@@ -996,6 +1010,7 @@ def superFunctionDefinition(packet):
         last_element['action_exp'] = reassignment_variable_xml
 
         last_element['transition_type'] = 'final_transition'
+        last_element['guard_exp'] = None
     else:
         last_transition = {'ntype': 'Simple', 'type': 'final_transition'}
         function.addTransition(last_transition)
@@ -1050,6 +1065,9 @@ def process_in_ignore_list(exp, exp_key, ignore_list, function, **kwargs):
     false_exp = {}
     #print('Expression:--',exp)
     #print(exp)
+    if exp_key not in exp:
+        function.addTransition(exp)
+        return
     #print(exp[exp_key])
     exp_node = exp[exp_key]
     #print('Exp Node---', exp_node)
@@ -1083,18 +1101,13 @@ def process_in_ignore_list(exp, exp_key, ignore_list, function, **kwargs):
 
 def check_transfer_in_function(function_name):
     for node in final_sol_list:
-        if node['nodeType'] == 'FunctionDefinition' and node['name'] == function_name:
-            # convert node into a string
-            node_string = str(node) # convert the node into a string
-            # check if the function name is present in the node_string
-            if 'transfer' in node_string:
-                #print('Hurrah! Transfer present in the function: ', function_name)
-                #print(node['name'])
-                return True
-            else:
-                #print('Transfer not present in the function: ', function_name)
-                #print(node['name'])
-                return False
+        if node['nodeType'] != 'FunctionDefinition':
+            continue
+        node_name = node['name'] or node.get('kind', '')
+        if node_name == function_name:
+            node_string = str(node)
+            return 'transfer' in node_string
+    return False
 
 
 
